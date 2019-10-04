@@ -156,6 +156,10 @@ IF (ENABLE_BASHCOMP)
     ENDIF (BASHCOMP_FOUND)
 ENDIF (ENABLE_BASHCOMP)
 
+OPTION(FILTER_CHANGELOG "Filter forbidden characters (like control characters) from changelog?" OFF)
+IF (FILTER_CHANGELOG)
+    ADD_DEFINITIONS("-DFILTER_CHANGELOG=1")
+ENDIF (FILTER_CHANGELOG)
 
 # Gen manpage
 

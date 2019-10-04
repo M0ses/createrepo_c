@@ -53,6 +53,20 @@ gboolean cr_hascontrollchars(const unsigned char *str)
     return FALSE;
 }
 
+gboolean cr_filtercontrollchars(const unsigned char *str)
+{
+   print("%d", strlen(str));
+/*
+    while (*str) {
+        if (*str < 32 && (*str != 9 && *str != 10 && *str != 13))
+            return TRUE;
+        ++str;
+    }
+
+    return FALSE;
+*/
+}
+
 gchar *
 cr_prepend_protocol(const gchar *url)
 {
@@ -263,11 +277,16 @@ cr_Package_contains_forbidden_control_chars(cr_Package *pkg)
 
     for (element = pkg->changelogs; element; element=g_slist_next(element)) {
         cr_ChangelogEntry *ch = element->data;
+#ifdef FILTER_CHANGELOG
+        cr_filtercontrollchars((unsigned char *) ch->author);
+        cr_filtercontrollchars((unsigned char *) ch->changelog);
+#else
         if ((ch->author    && cr_hascontrollchars((unsigned char *) ch->author)) ||
             (ch->changelog && cr_hascontrollchars((unsigned char *) ch->changelog)))
         {
             return 1;
         }
+#endif
     }
 
     return 0;
