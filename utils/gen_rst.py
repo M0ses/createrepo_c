@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import sys
 import re
@@ -32,6 +32,9 @@ class Info(object):
         if self.copyright:
             rst += ":Copyright: %s\n" % self.copyright
 
+        # Add manual page section
+        rst += ":Manual section: 8\n"
+
         # Add date
         rst += ":Date: $Date: %s $\n\n" % datetime.datetime.strftime(datetime.datetime.utcnow(), format="%F %X")
 
@@ -40,6 +43,14 @@ class Info(object):
             rst += "SYNOPSIS\n"
             rst += "========\n\n"
             for line in self.synopsis:
+                rst += "%s\n\n" % line
+            rst += "\n"
+
+        # Add description
+        if self.description:
+            rst += "DESCRIPTION\n"
+            rst += "===========\n\n"
+            for line in self.description:
                 rst += "%s\n\n" % line
             rst += "\n"
 
@@ -70,13 +81,13 @@ def parse_arguments_from_c_file(filename):
     try:
         content = open(filename, "r").read()
     except IOError:
-        print "Error: Cannot open file %s" % filename
+        print("Error: Cannot open file %s" % filename)
         return args
 
     re_cmd_entries = re.compile(r"\s*(static|const)[ ]+GOptionEntry[^{]*{(?P<entries>.*)\s*NULL\s*}[,]?\s*};", re.MULTILINE|re.DOTALL)
     match = re_cmd_entries.search(content)
     if not match:
-        print "Warning: Cannot find GOptionEntry section in %s" % filename
+        print("Warning: Cannot find GOptionEntry section in %s" % filename)
         return args
 
     re_single_entry = re.compile(r"""{\s*"(?P<long_name>[^"]*)"\s*,        # long name
@@ -134,7 +145,7 @@ def parse_arguments_from_c_file(filename):
         entry_match = re_single_entry.search(raw_entries_str[start:])
     # End while
 
-    print >> sys.stderr, "Loaded %2d arguments" % (i,)
+    print("Loaded %2d arguments" % (i,), file=sys.stderr)
     return args
 
 
@@ -147,7 +158,7 @@ if __name__ == "__main__":
     options, args = parser.parse_args()
 
     if len(args) < 1:
-        print >> sys.stderr, "Error: Must specify a input filename. (Example: ../src/cmd_parser.c)"
+        print("Error: Must specify a input filename. (Example: ../src/cmd_parser.c)", file=sys.stderr)
         sys.exit(1)
 
     args = parse_arguments_from_c_file(args[0])
@@ -177,11 +188,18 @@ if __name__ == "__main__":
         info = Info(NAME,
                 summary="Create rpm-md format (xml-rpm-metadata) repository",
                 synopsis=["%s [options] <directory>" % (NAME,)],
+                description=["Uses rpm packages from <directory> to create repodata.",
+                             "If compiled with libmodulemd support modular metadata inside <directory> identified by the patterns below are automatically collected, merged and added to the repodata.",
+                             "The patterns are:",
+                             " - \*.modulemd.yaml (recommended file name: N:S:V:C:A.modulemd.yaml)",
+                             " - \*.modulemd-defaults.yaml (recommended file name: N.modulemd-defaults.yaml)",
+                             " - modules.yaml (recommended way of importing multiple documents at once)"],
                 options=args)
+
 
     ret = info.gen_rst()
     if not ret:
-        print >> sys.stderr, "Error: Rst has not been generated"
+        print("Error: Rst has not been generated", file=sys.stderr)
         sys.exit(1)
 
-    print ret
+    print(ret)

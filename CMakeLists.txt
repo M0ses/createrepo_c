@@ -35,50 +35,31 @@ SET(G_LOG_DOMAIN "C_CREATEREPOLIB")
 
 find_package(BZip2 REQUIRED)
 find_package(CURL REQUIRED)
-find_package(EXPAT REQUIRED)
-find_package(GLIB2 REQUIRED)
-find_package(GTHREAD2 REQUIRED)
-find_package(Libmagic REQUIRED)
 find_package(LibXml2 REQUIRED)
-find_package(LZMA REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(Sqlite3 REQUIRED)
 find_package(ZLIB REQUIRED)
+
+pkg_check_modules(GLIB2 REQUIRED glib-2.0)
+pkg_check_modules(GTHREAD2 REQUIRED gthread-2.0)
+pkg_check_modules(LZMA REQUIRED liblzma)
+pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+pkg_check_modules(RPM REQUIRED rpm)
+
+pkg_check_modules(LIBMAGIC libmagic)
+# the pkg-config was only added in F33
+IF (NOT LIBMAGIC_FOUND)
+    find_path(LIBMAGIC_INCLUDE_DIRS NAMES magic.h PATHS ${CMAKE_INCLUDE_PATH})
+    find_library(LIBMAGIC_LIBRARIES NAMES magic PATHS ${CMAKE_LIBRARY_PATH})
+ENDIF()
 
 # Add include dirs
 
+include_directories(${BZIP2_INCLUDE_DIRS})
+include_directories(${CURL_INCLUDE_DIRS})
 include_directories(${GLIB2_INCLUDE_DIRS})
 include_directories(${LIBXML2_INCLUDE_DIR})
 include_directories(${OPENSSL_INCLUDE_DIR})
-
-
-IF (RPM_PATH)
-    SET (RPM_PATH "/home/tmlcoch/git/rpm")
-    include_directories("${RPM_PATH}/include/")
-    SET(RPMDB_LIBRARY "${RPM_PATH}/rpmio/.libs/librpmio.so"
-                      "${RPM_PATH}/lib/.libs/librpm.so")
-    message("Using custom RPM: ${RPMDB_LIBRARY}")
-ELSE (RPM_PATH)
-    # rpm:
-    FIND_LIBRARY (RPMDB_LIBRARY NAMES rpmdb)
-    IF (NOT RPMDB_LIBRARY)
-        FIND_LIBRARY (RPMDB_LIBRARY NAMES rpm)
-        IF (NOT RPMDB_LIBRARY)
-            MESSAGE(FATAL_ERROR "No Rpm library installed")
-        ENDIF (NOT RPMDB_LIBRARY)
-    ENDIF (NOT RPMDB_LIBRARY)
-
-
-    # rpmio:
-    FIND_LIBRARY (RPMIO_LIBRARY NAMES rpmio)
-    IF (RPMIO_LIBRARY)
-        SET(RPMDB_LIBRARY ${RPMIO_LIBRARY} ${RPMDB_LIBRARY})
-    ELSE (RPMIO_LIBRARY)
-        MESSAGE(FATAL_ERROR "No Rpmio library installed")
-    ENDIF (RPMIO_LIBRARY)
-
-    message("Using system RPM: ${RPMDB_LIBRARY}")
-ENDIF (RPM_PATH)
+include_directories(${ZLIB_INCLUDE_DIR})
 
 # SuSE/Mageia/Mandriva legacy weak deps support
 OPTION (ENABLE_LEGACY_WEAKDEPS "Enable legacy SUSE/Mageia/Mandriva weakdeps support?" ON)
@@ -87,7 +68,7 @@ IF (ENABLE_LEGACY_WEAKDEPS)
 ENDIF (ENABLE_LEGACY_WEAKDEPS)
 
 # drpm
-OPTION (ENABLE_DRPM "Enable delta RPM support?" ON)
+OPTION (ENABLE_DRPM "Enable delta RPM support?" OFF)
 IF (ENABLE_DRPM)
     pkg_check_modules(DRPM REQUIRED drpm>=0.4.0)
     include_directories (${DRPM_INCLUDE_DIRS})
@@ -107,9 +88,9 @@ ENDIF (WITH_ZCHUNK)
 
 OPTION (WITH_LIBMODULEMD "Build with libmodulemd support" ON)
 IF (WITH_LIBMODULEMD)
-	find_package(LIBMODULEMD REQUIRED)
-	include_directories(${LIBMODULEMD_INCLUDE_DIRS})
-	SET (CMAKE_C_FLAGS          "${CMAKE_C_FLAGS} -DWITH_LIBMODULEMD")
+    pkg_check_modules(LIBMODULEMD REQUIRED modulemd-2.0)
+    include_directories(${LIBMODULEMD_INCLUDE_DIRS})
+    SET (CMAKE_C_FLAGS          "${CMAKE_C_FLAGS} -DWITH_LIBMODULEMD")
     SET (CMAKE_C_FLAGS_DEBUG    "${CMAKE_C_FLAGS_DEBUG} -DWITH_LIBMODULEMD")
 ENDIF (WITH_LIBMODULEMD)
 
@@ -129,12 +110,6 @@ ENDIF (ENABLE_THREADED_XZ_ENCODER)
 INCLUDE (${CMAKE_SOURCE_DIR}/VERSION.cmake)
 SET (VERSION "${CR_MAJOR}.${CR_MINOR}.${CR_PATCH}")
 message("Package version: ${VERSION}")
-
-
-# Default python version
-if (NOT PYTHON_DESIRED)
-    set (PYTHON_DESIRED "3")
-endif()
 
 # Other files
 

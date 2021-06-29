@@ -158,15 +158,15 @@ cr_detect_compression(const char *filename, GError **err)
         return CR_CW_ZCK_COMPRESSION;
     } else if (g_str_has_suffix(filename, ".xml") ||
                g_str_has_suffix(filename, ".tar") ||
+               g_str_has_suffix(filename, ".yaml") ||
                g_str_has_suffix(filename, ".sqlite"))
     {
         return CR_CW_NO_COMPRESSION;
     }
 
-
     // No success? Let's get hardcore... (Use magic bytes)
 
-    magic_t myt = magic_open(MAGIC_MIME);
+    magic_t myt = magic_open(MAGIC_MIME | MAGIC_SYMLINK);
     if (myt == NULL) {
         g_set_error(err, ERR_DOMAIN, CRE_MAGIC,
                     "magic_open() failed: Cannot allocate the magic cookie");
@@ -191,7 +191,6 @@ cr_detect_compression(const char *filename, GError **err)
             g_str_has_prefix(mime_type, "application/gzipped") ||
             g_str_has_prefix(mime_type, "application/x-gzip-compressed") ||
             g_str_has_prefix(mime_type, "application/x-compress") ||
-            g_str_has_prefix(mime_type, "application/x-gzip") ||
             g_str_has_prefix(mime_type, "application/x-gunzip") ||
             g_str_has_prefix(mime_type, "multipart/x-gzip"))
         {
@@ -591,14 +590,15 @@ cr_sopen(const char *filename,
         case (CR_CW_ZCK_COMPRESSION): { // -------------------------------------
 #ifdef WITH_ZCHUNK
             FILE *f = fopen(filename, mode_str);
-            file->INNERFILE = f;
-            int fd = fileno(f);
 
             if (!f) {
                 g_set_error(err, ERR_DOMAIN, CRE_IO,
                             "fopen(): %s", g_strerror(errno));
                 break;
             }
+
+            file->INNERFILE = f;
+            int fd = fileno(f);
 
             file->FILE = (void *) zck_create();
             zckCtx *zck = file->FILE;
@@ -790,7 +790,7 @@ cr_close(CR_FILE *cr_file, GError **err)
 
                 switch (rc) {
                     case BZ_SEQUENCE_ERROR:
-                        // This really shoud not happen
+                        // This really should not happen
                         err_msg = "file was opened with BZ2_bzReadOpen";
                         break;
                     case BZ_IO_ERROR:
@@ -951,7 +951,7 @@ int
 cr_read(CR_FILE *cr_file, void *buffer, unsigned int len, GError **err)
 {
     int bzerror;
-    int ret;
+    int ret = CR_CW_ERR;
 
     assert(cr_file);
     assert(buffer);
@@ -995,11 +995,11 @@ cr_read(CR_FILE *cr_file, void *buffer, unsigned int len, GError **err)
 
                 switch (bzerror) {
                     case BZ_PARAM_ERROR:
-                        // This shoud not happend
+                        // This should not happend
                         err_msg = "bad function params!";
                         break;
                     case BZ_SEQUENCE_ERROR:
-                        // This shoud not happend
+                        // This should not happend
                         err_msg = "file was opened with BZ2_bzWriteOpen";
                         break;
                     case BZ_IO_ERROR:
@@ -1227,11 +1227,11 @@ cr_write(CR_FILE *cr_file, const void *buffer, unsigned int len, GError **err)
 
                 switch (bzerror) {
                     case BZ_PARAM_ERROR:
-                        // This shoud not happend
+                        // This should not happend
                         err_msg = "bad function params!";
                         break;
                     case BZ_SEQUENCE_ERROR:
-                        // This shoud not happend
+                        // This should not happend
                         err_msg = "file was opened with BZ2_bzReadOpen";
                         break;
                     case BZ_IO_ERROR:

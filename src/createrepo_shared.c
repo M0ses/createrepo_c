@@ -28,8 +28,6 @@
 #include "misc.h"
 #include "cleanup.h"
 
-int *global_exit_status = NULL;  // pointer to exit_value used in failure_exit_cleanup
-
 char *global_lock_dir     = NULL;  // Path to .repodata/ dir that is used as a lock
 char *global_tmp_out_repo = NULL;  // Path to temporary repodata directory,
                                    // if NULL that it's same as
@@ -43,18 +41,16 @@ char *global_tmp_out_repo = NULL;  // Path to temporary repodata directory,
  *
  */
 static void
-failure_exit_cleanup()
+exit_cleanup()
 {
-    if (global_exit_status && *global_exit_status != EXIT_SUCCESS) {
-        if (global_lock_dir) {
-            g_debug("Removing %s", global_lock_dir);
-            cr_remove_dir(global_lock_dir, NULL);
-        }
+    if (global_lock_dir) {
+        g_debug("Removing %s", global_lock_dir);
+        cr_remove_dir(global_lock_dir, NULL);
+    }
 
-        if (global_tmp_out_repo) {
-            g_debug("Removing %s", global_tmp_out_repo);
-            cr_remove_dir(global_tmp_out_repo, NULL);
-        }
+    if (global_tmp_out_repo) {
+        g_debug("Removing %s", global_tmp_out_repo);
+        cr_remove_dir(global_tmp_out_repo, NULL);
     }
 }
 
@@ -64,14 +60,8 @@ failure_exit_cleanup()
 static void
 sigint_catcher(int sig)
 {
-    g_message("%s catched: Terminating...", strsignal(sig));
+    g_message("%s caught: Terminating...", strsignal(sig));
     exit(1);
-}
-
-void
-cr_set_global_exit_value(int *exit_val)
-{
-    global_exit_status = exit_val;
 }
 
 gboolean
@@ -89,7 +79,7 @@ cr_set_cleanup_handler(const char *lock_dir,
         global_tmp_out_repo = NULL;
 
     // Register on exit cleanup function
-    if (atexit(failure_exit_cleanup))
+    if (atexit(exit_cleanup))
         g_warning("Cannot set exit cleanup function by atexit()");
 
     // Prepare signal handler configuration
@@ -109,7 +99,9 @@ cr_set_cleanup_handler(const char *lock_dir,
     sigaction(SIGUSR2, &sigact, NULL);
 
     // Handle signals that terminate (from the POSIX.1-2001)
+#ifdef SIGPOLL
     sigaction(SIGPOLL, &sigact, NULL);
+#endif
     sigaction(SIGPROF, &sigact, NULL);
     sigaction(SIGVTALRM, &sigact, NULL);
 
@@ -142,7 +134,9 @@ cr_block_terminating_signals(GError **err)
     sigaddset(&intmask, SIGTERM);
     sigaddset(&intmask, SIGUSR1);
     sigaddset(&intmask, SIGUSR2);
+#ifdef SIGPOLL
     sigaddset(&intmask, SIGPOLL);
+#endif
     sigaddset(&intmask, SIGPROF);
     sigaddset(&intmask, SIGVTALRM);
 
@@ -170,7 +164,9 @@ cr_unblock_terminating_signals(GError **err)
     sigaddset(&intmask, SIGTERM);
     sigaddset(&intmask, SIGUSR1);
     sigaddset(&intmask, SIGUSR2);
+#ifdef SIGPOLL
     sigaddset(&intmask, SIGPOLL);
+#endif
     sigaddset(&intmask, SIGPROF);
     sigaddset(&intmask, SIGVTALRM);
 

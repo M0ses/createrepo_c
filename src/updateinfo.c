@@ -59,6 +59,8 @@ cr_updatecollectionpackage_copy(const cr_UpdateCollectionPackage *orig)
 
     pkg->sum_type = orig->sum_type;
     pkg->reboot_suggested = orig->reboot_suggested;
+    pkg->restart_suggested = orig->restart_suggested;
+    pkg->relogin_suggested = orig->relogin_suggested;
 
     return pkg;
 }
@@ -159,6 +161,7 @@ cr_updatecollection_free(cr_UpdateCollection *collection)
 {
     if (!collection)
         return;
+    cr_updatecollectionmodule_free(collection->module);
     cr_slist_free_full(collection->packages,
                        (GDestroyNotify) cr_updatecollectionpackage_free);
     g_string_chunk_free(collection->chunk);
@@ -249,6 +252,7 @@ cr_updaterecord_copy(const cr_UpdateRecord *orig)
     rec->summary = cr_safe_string_chunk_insert(rec->chunk, orig->summary);
     rec->description = cr_safe_string_chunk_insert(rec->chunk, orig->description);
     rec->solution = cr_safe_string_chunk_insert(rec->chunk, orig->solution);
+    rec->reboot_suggested = orig->reboot_suggested;
 
     if (orig->references) {
         GSList *newlist = NULL;

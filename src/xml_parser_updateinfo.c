@@ -23,7 +23,6 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
-#include <expat.h>
 #include "xml_parser_internal.h"
 #include "xml_parser.h"
 #include "updateinfo.h"
@@ -58,14 +57,15 @@ typedef enum {
     STATE_PACKAGE,
     STATE_FILENAME,
     STATE_SUM,
+    STATE_UPDATERECORD_REBOOTSUGGESTED,
     STATE_REBOOTSUGGESTED,
-    STATE_RESTARTSUGGESTED, // Not implemented
-    STATE_RELOGINSUGGESTED, // Not implemented
+    STATE_RESTARTSUGGESTED,
+    STATE_RELOGINSUGGESTED,
     NUMSTATES,
 } cr_UpdateinfoState;
 
 /* NOTE: Same states in the first column must be together!!!
- * Performance tip: More frequent elements shoud be listed
+ * Performance tip: More frequent elements should be listed
  * first in its group (eg: element "package" (STATE_PACKAGE)
  * has a "file" element listed first, because it is more frequent
  * than a "version" element). */
@@ -86,6 +86,7 @@ static cr_StatesSwitch stateswitches[] = {
     { STATE_UPDATE,     "message",           STATE_MESSAGE,           1 }, // NI
     { STATE_UPDATE,     "references",        STATE_REFERENCES,        0 },
     { STATE_UPDATE,     "pkglist",           STATE_PKGLIST,           0 },
+    { STATE_UPDATE,     "reboot_suggested",  STATE_UPDATERECORD_REBOOTSUGGESTED,0 },
     { STATE_REFERENCES, "reference",         STATE_REFERENCE,         0 },
     { STATE_PKGLIST,    "collection",        STATE_COLLECTION,        0 },
     { STATE_COLLECTION, "package",           STATE_PACKAGE,           0 },
@@ -94,13 +95,13 @@ static cr_StatesSwitch stateswitches[] = {
     { STATE_PACKAGE,    "filename",          STATE_FILENAME,          1 },
     { STATE_PACKAGE,    "sum",               STATE_SUM,               1 },
     { STATE_PACKAGE,    "reboot_suggested",  STATE_REBOOTSUGGESTED,   0 },
-    { STATE_PACKAGE,    "restart_suggested", STATE_RESTARTSUGGESTED,  0 }, // NI
-    { STATE_PACKAGE,    "relogin_suggested", STATE_RELOGINSUGGESTED,  0 }, // NI
+    { STATE_PACKAGE,    "restart_suggested", STATE_RESTARTSUGGESTED,  0 },
+    { STATE_PACKAGE,    "relogin_suggested", STATE_RELOGINSUGGESTED,  0 },
     { NUMSTATES,        NULL, NUMSTATES, 0 }
 };
 
-static void XMLCALL
-cr_start_handler(void *pdata, const char *element, const char **attr)
+static void
+cr_start_handler(void *pdata, const xmlChar *element, const xmlChar **attr)
 {
     cr_ParserData *pd = pdata;
     cr_StatesSwitch *sw;
@@ -122,7 +123,7 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
 
     // Find current state by its name
     for (sw = pd->swtab[pd->state]; sw->from == pd->state; sw++)
-        if (!strcmp(element, sw->ename))
+        if (!strcmp((char *) element, sw->ename))
             break;
     if (sw->from != pd->state) {
         // No state for current element (unknown element)
@@ -143,7 +144,6 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
     // Shortcuts
     cr_UpdateRecord *rec = pd->updaterecord;
     cr_UpdateCollection *collection = pd->updatecollection;
-    cr_UpdateCollectionModule *module = pd->updatecollectionmodule;
     cr_UpdateCollectionPackage *package = pd->updatecollectionpackage;
 
     switch(pd->state) {
@@ -278,7 +278,9 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
         assert(!pd->updatecollectionmodule);
         assert(!pd->updatecollectionpackage);
 
-        module = cr_updatecollectionmodule_new();
+        cr_UpdateCollectionModule *module = cr_updatecollectionmodule_new();
+        assert(module);
+
         if (module)
             collection->module = module;
 
@@ -321,6 +323,8 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
         assert(!pd->updatecollectionpackage);
 
         package = cr_updatecollectionpackage_new();
+        assert(package);
+
         cr_updatecollection_append_package(collection, package);
         pd->updatecollectionpackage = package;
 
@@ -360,6 +364,12 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
             package->sum_type = cr_checksum_type(val);
         break;
 
+    case STATE_UPDATERECORD_REBOOTSUGGESTED:
+        assert(pd->updateinfo);
+        assert(pd->updaterecord);
+        rec->reboot_suggested = TRUE;
+        break;
+
     case STATE_REBOOTSUGGESTED:
         assert(pd->updateinfo);
         assert(pd->updaterecord);
@@ -367,11 +377,27 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
         assert(pd->updatecollectionpackage);
         package->reboot_suggested = TRUE;
         break;
+
+    case STATE_RESTARTSUGGESTED:
+        assert(pd->updateinfo);
+        assert(pd->updaterecord);
+        assert(pd->updatecollection);
+        assert(pd->updatecollectionpackage);
+        package->restart_suggested = TRUE;
+        break;
+
+    case STATE_RELOGINSUGGESTED:
+        assert(pd->updateinfo);
+        assert(pd->updaterecord);
+        assert(pd->updatecollection);
+        assert(pd->updatecollectionpackage);
+        package->relogin_suggested = TRUE;
+        break;
     }
 }
 
-static void XMLCALL
-cr_end_handler(void *pdata, G_GNUC_UNUSED const char *element)
+static void
+cr_end_handler(void *pdata, G_GNUC_UNUSED const xmlChar *element)
 {
     cr_ParserData *pd = pdata;
     unsigned int state = pd->state;
@@ -406,6 +432,9 @@ cr_end_handler(void *pdata, G_GNUC_UNUSED const char *element)
     case STATE_MODULE:
     case STATE_PKGLIST:
     case STATE_REBOOTSUGGESTED:
+    case STATE_RESTARTSUGGESTED:
+    case STATE_RELOGINSUGGESTED:
+    case STATE_UPDATERECORD_REBOOTSUGGESTED:
         // All elements with no text data and without need of any
         // post processing should go here
         break;
@@ -545,7 +574,6 @@ cr_xml_parse_updateinfo(const char *path,
 {
     int ret = CRE_OK;
     cr_ParserData *pd;
-    XML_Parser parser;
     GError *tmp_err = NULL;
 
     assert(path);
@@ -553,13 +581,18 @@ cr_xml_parse_updateinfo(const char *path,
     assert(!err || *err == NULL);
 
     // Init
-
-    parser = XML_ParserCreate(NULL);
-    XML_SetElementHandler(parser, cr_start_handler, cr_end_handler);
-    XML_SetCharacterDataHandler(parser, cr_char_handler);
+    xmlSAXHandler sax;
+    memset(&sax, 0, sizeof(sax));
+    sax.startElement = cr_start_handler;
+    sax.endElement = cr_end_handler;
+    sax.characters = cr_char_handler;
 
     pd = cr_xml_parser_data(NUMSTATES);
-    pd->parser = &parser;
+
+    xmlParserCtxtPtr parser;
+    parser = xmlCreatePushParserCtxt(&sax, pd, NULL, 0, NULL);
+
+    pd->parser = parser;
     pd->state = STATE_START;
     pd->updateinfo = updateinfo;
     pd->warningcb = warningcb;
@@ -569,8 +602,6 @@ cr_xml_parse_updateinfo(const char *path,
             pd->swtab[sw->from] = sw;
         pd->sbtab[sw->to] = sw->from;
     }
-
-    XML_SetUserData(parser, pd);
 
     // Parsing
 
@@ -589,7 +620,7 @@ cr_xml_parse_updateinfo(const char *path,
     // Clean up
 
     cr_xml_parser_data_free(pd);
-    XML_ParserFree(parser);
+    xmlFreeParserCtxt(parser);
 
     return ret;
 }

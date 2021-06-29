@@ -31,6 +31,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include "cleanup.h"
@@ -367,6 +369,21 @@ cr_get_filename(const char *filepath)
     return filename;
 }
 
+char *
+cr_get_cleaned_href(const char *filepath)
+{
+    char *filename;
+
+    if (!filepath)
+        return NULL;
+
+    filename = (char *) filepath;
+
+    while (filename[0] == '.' && filename[1] == '/')
+        filename += 2;
+
+    return filename;
+}
 
 gboolean
 cr_copy_file(const char *src, const char *in_dst, GError **err)
@@ -429,7 +446,7 @@ cr_copy_file(const char *src, const char *in_dst, GError **err)
 
 int
 cr_compress_file_with_stat(const char *src,
-                           char **in_dst,
+                           const char *in_dst,
                            cr_CompressionType compression,
                            cr_ContentStat *stat,
                            const char *zck_dict_dir,
@@ -441,7 +458,7 @@ cr_compress_file_with_stat(const char *src,
     char buf[BUFFER_SIZE];
     CR_FILE *orig = NULL;
     CR_FILE *new = NULL;
-    gchar *dst = (gchar *) *in_dst;
+    gchar *dst = (gchar *) in_dst;
     GError *tmp_err = NULL;
 
     assert(src);
@@ -459,30 +476,23 @@ cr_compress_file_with_stat(const char *src,
 
     if (!dst) {
         // If destination is NULL, use src + compression suffix
-        *in_dst = g_strconcat(src,
-                              c_suffix,
-                              NULL);
+        dst = g_strconcat(src, c_suffix, NULL);
     } else if (g_str_has_suffix(dst, "/")) {
         // If destination is dir use filename from src + compression suffix
-        *in_dst = g_strconcat(dst,
-                              cr_get_filename(src),
-                              c_suffix,
-                              NULL);
+        dst = g_strconcat(dst, cr_get_filename(src), c_suffix, NULL);
     } else if (c_suffix && !g_str_has_suffix(dst, c_suffix)) {
-        cr_CompressionType old_type = cr_detect_compression(src, &tmp_err);
+        // If destination is missing compression suffix or has a different one, use specified compression suffix
+        cr_CompressionType old_type = cr_detect_compression(dst, &tmp_err);
         if (tmp_err) {
-            g_debug("%s: Unable to detect compression type of %s", __func__, src);
+            g_debug("%s: Unable to detect compression type of %s, using the filename as is.", __func__, dst);
             g_clear_error(&tmp_err);
-        } else if (old_type != CR_CW_NO_COMPRESSION) {
+        } else if (old_type == CR_CW_NO_COMPRESSION) {
+            dst = g_strconcat(dst, c_suffix, NULL);
+        } else {
             _cleanup_free_ gchar *tmp_file = g_strndup(dst, strlen(dst) - strlen(cr_compression_suffix(old_type)));
-            *in_dst = g_strconcat(tmp_file,
-                                  c_suffix,
-                                  NULL);
+            dst = g_strconcat(tmp_file, c_suffix, NULL);
         }
     }
-    if (dst != *in_dst && dst)
-        g_free(dst);
-    dst = (gchar *) *in_dst;
 
     int mode = CR_CW_AUTO_DETECT_COMPRESSION;
 
@@ -493,6 +503,8 @@ cr_compress_file_with_stat(const char *src,
     if (!orig) {
         ret = tmp_err->code;
         g_propagate_prefixed_error(err, tmp_err, "Cannot open %s: ", src);
+        if (dst != in_dst)
+            g_free(dst);
         return ret;
     }
 
@@ -553,6 +565,9 @@ cr_compress_file_with_stat(const char *src,
     }
 
 compress_file_cleanup:
+
+    if (dst != in_dst)
+        g_free(dst);
 
     if (orig)
         cr_close(orig, NULL);

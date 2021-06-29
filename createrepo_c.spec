@@ -1,33 +1,22 @@
 %global libmodulemd_version 2.3.0
 
-# Bash completion (we need different approach for RHEL-6)
-%if 0%{?rhel} == 6
-%global bash_completion %config%{_sysconfdir}/bash_completion.d/createrepo_c.bash
-%else
-%global bash_completion %{_datadir}/bash-completion/completions/*
-%endif
+%define __cmake_in_source_build 1
 
-%if 0%{?rhel} && 0%{?rhel} <= 7
-%bcond_with python3
+%global bash_completion %{_datadir}/bash-completion/completions/*
+
+%if 0%{?rhel} && ( 0%{?rhel} <= 7 || 0%{?rhel} >= 9 )
 %bcond_with drpm
 %else
-%bcond_without python3
 %bcond_without drpm
 %endif
 
-%if 0%{?fedora} > 29 || 0%{?rhel} > 7
-%bcond_with python2
-%else
-%bcond_without python2
-%endif
-
-%if 0%{?rhel} || 0%{?fedora} < 29
+%if 0%{?rhel}
 %bcond_with zchunk
 %else
 %bcond_without zchunk
 %endif
 
-%if 0%{?rhel} || 0%{?fedora} < 29
+%if 0%{?rhel} && 0%{?rhel} < 8
 %bcond_with libmodulemd
 %else
 %bcond_without libmodulemd
@@ -35,7 +24,7 @@
 
 Summary:        Creates a common metadata repository
 Name:           createrepo_c
-Version:        0.15.2
+Version:        0.17.3
 Release:        1%{?dist}
 License:        GPLv2+
 URL:            https://github.com/rpm-software-management/createrepo_c
@@ -45,7 +34,6 @@ BuildRequires:  cmake
 BuildRequires:  gcc
 BuildRequires:  bzip2-devel
 BuildRequires:  doxygen
-BuildRequires:  expat-devel
 BuildRequires:  file-devel
 BuildRequires:  glib2-devel >= 2.22.0
 BuildRequires:  libcurl-devel
@@ -53,6 +41,7 @@ BuildRequires:  libxml2-devel
 BuildRequires:  openssl-devel
 BuildRequires:  rpm-devel >= 4.8.0-28
 BuildRequires:  sqlite-devel
+BuildRequires:  xz
 BuildRequires:  xz-devel
 BuildRequires:  zlib-devel
 %if %{with zchunk}
@@ -65,12 +54,8 @@ BuildRequires:  libmodulemd
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
 %endif
 Requires:       %{name}-libs =  %{version}-%{release}
-%if 0%{?rhel} == 6
-Requires: rpm >= 4.8.0-28
-%else
 BuildRequires:  bash-completion
 Requires: rpm >= 4.9.0
-%endif
 %if %{with drpm}
 BuildRequires:  drpm-devel >= 0.4.0
 %endif
@@ -101,84 +86,35 @@ Requires:   %{name}-libs%{?_isa} = %{version}-%{release}
 This package contains the createrepo_c C library and header files.
 These development files are for easy manipulation with a repodata.
 
-%if %{with python2}
-%package -n python2-%{name}
-Summary:        Python bindings for the createrepo_c library
-%{?python_provide:%python_provide python2-%{name}}
-BuildRequires:  python2-devel
-BuildRequires:  python2-nose
-%if 0%{?rhel} && 0%{?rhel} <= 7
-BuildRequires:  python-sphinx
-%else
-BuildRequires:  python2-sphinx
-%endif
-Requires:       %{name}-libs = %{version}-%{release}
-
-%description -n python2-%{name}
-Python bindings for the createrepo_c library.
-%endif
-
-%if %{with python3}
 %package -n python3-%{name}
 Summary:        Python 3 bindings for the createrepo_c library
 %{?python_provide:%python_provide python3-%{name}}
 BuildRequires:  python3-devel
-BuildRequires:  python3-nose
 BuildRequires:  python3-sphinx
 Requires:       %{name}-libs = %{version}-%{release}
 
 %description -n python3-%{name}
 Python 3 bindings for the createrepo_c library.
-%endif
 
 %prep
 %autosetup -p1
-%if %{with python2}
-mkdir build-py2
-%endif
 
-%if %{with python3}
 mkdir build-py3
-%endif
 
 %build
-# Build createrepo_c with Python 2
-%if %{with python2}
-pushd build-py2
-  %cmake .. -DPYTHON_DESIRED:FILEPATH=%{__python2} %{!?with_zchunk:-DWITH_ZCHUNK=OFF} %{!?with_libmodulemd:-DWITH_LIBMODULEMD=OFF}
-  make %{?_smp_mflags} RPM_OPT_FLAGS="%{optflags}"
-  %if %{without python3}
-  # Build C documentation
-  make doc-c
-  %endif
-popd
-%endif
-
 # Build createrepo_c with Pyhon 3
-%if %{with python3}
 pushd build-py3
-  %cmake .. -DPYTHON_DESIRED:FILEPATH=%{__python3} %{!?with_zchunk:-DWITH_ZCHUNK=OFF} %{!?with_libmodulemd:-DWITH_LIBMODULEMD=OFF}
+  %cmake .. \
+      -DWITH_ZCHUNK=%{?with_zchunk:ON}%{!?with_zchunk:OFF} \
+      -DWITH_LIBMODULEMD=%{?with_libmodulemd:ON}%{!?with_libmodulemd:OFF} \
+      -DENABLE_DRPM=%{?with_drpm:ON}%{!?with_drpm:OFF}
   make %{?_smp_mflags} RPM_OPT_FLAGS="%{optflags}"
   # Build C documentation
   make doc-c
 popd
-%endif
 
 %check
-%if %{with python2}
-pushd build-py2
-  %if %{without python3}
-  # Compile C tests
-  make tests
-  %endif
-
-  # Run Python 2 tests
-  make ARGS="-V" test
-popd
-%endif
-
 # Run Python 3 tests
-%if %{with python3}
 pushd build-py3
   # Compile C tests
   make tests
@@ -186,22 +122,12 @@ pushd build-py3
   # Run Python 3 tests
   make ARGS="-V" test
 popd
-%endif
 
 %install
-%if %{with python2}
-pushd build-py2
-  # Install createrepo_c with Python 2
-  make install DESTDIR=%{buildroot}
-popd
-%endif
-
-%if %{with python3}
 pushd build-py3
   # Install createrepo_c with Python 3
   make install DESTDIR=%{buildroot}
 popd
-%endif
 
 %if 0%{?fedora} || 0%{?rhel} > 7
 ln -sr %{buildroot}%{_bindir}/createrepo_c %{buildroot}%{_bindir}/createrepo
@@ -239,25 +165,13 @@ ln -sr %{buildroot}%{_bindir}/modifyrepo_c %{buildroot}%{_bindir}/modifyrepo
 %{_libdir}/lib%{name}.so.*
 
 %files devel
-%if %{with python3}
 %doc build-py3/doc/html
-%else
-%doc build-py2/doc/html
-%endif
 %{_libdir}/lib%{name}.so
 %{_libdir}/pkgconfig/%{name}.pc
 %{_includedir}/%{name}/
 
-%if %{with python2}
-%files -n python2-%{name}
-%{python2_sitearch}/%{name}/
-%{python2_sitearch}/%{name}-%{version}-py%{python2_version}.egg-info
-%endif
-
-%if %{with python3}
 %files -n python3-%{name}
 %{python3_sitearch}/%{name}/
 %{python3_sitearch}/%{name}-%{version}-py%{python3_version}.egg-info
-%endif
 
 %changelog

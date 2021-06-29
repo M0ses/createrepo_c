@@ -63,7 +63,7 @@ metadata_new(PyTypeObject *type,
 
 PyDoc_STRVAR(metadata_init__doc__,
 ".. method:: __init__(key=HT_KEY_DEFAULT, use_single_chunk=False, pkglist=[])\n\n"
-"    :arg key: Which value shoud be used as a key. One of HT_KEY_* constants.\n"
+"    :arg key: Which value should be used as a key. One of HT_KEY_* constants.\n"
 "    :arg use_single_chunk: Specify if all package strings should be stored\n"
 "        in metadata object instead of package iself. This save some\n"
 "        space if you need to have a all packages loaded into a memory.\n"
@@ -148,8 +148,7 @@ load_xml(_MetadataObject *self, PyObject *args)
     if (check_MetadataStatus(self))
         return NULL;
 
-    cr_metadata_load_xml(self->md, MetadataLocation_FromPyObject(ml), &tmp_err);
-    if (tmp_err) {
+    if (cr_metadata_load_xml(self->md, MetadataLocation_FromPyObject(ml), &tmp_err) != CRE_OK) {
         nice_exception(&tmp_err, NULL);
         return NULL;
     }
@@ -352,51 +351,15 @@ static struct PyMethodDef metadata_methods[] = {
 
 PyTypeObject Metadata_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "createrepo_c.Metadata",        /* tp_name */
-    sizeof(_MetadataObject),        /* tp_basicsize */
-    0,                              /* tp_itemsize */
-    (destructor)metadata_dealloc,   /* tp_dealloc */
-    0,                              /* tp_print */
-    0,                              /* tp_getattr */
-    0,                              /* tp_setattr */
-    0,                              /* tp_compare */
-    (reprfunc)metadata_repr,        /* tp_repr */
-    0,                              /* tp_as_number */
-    0,                              /* tp_as_sequence */
-    0,                              /* tp_as_mapping */
-    0,                              /* tp_hash */
-    0,                              /* tp_call */
-    0,                              /* tp_str */
-    0,                              /* tp_getattro */
-    0,                              /* tp_setattro */
-    0,                              /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE, /* tp_flags */
-    metadata_init__doc__,           /* tp_doc */
-    0,                              /* tp_traverse */
-    0,                              /* tp_clear */
-    0,                              /* tp_richcompare */
-    0,                              /* tp_weaklistoffset */
-    PyObject_SelfIter,              /* tp_iter */
-    0,                              /* tp_iternext */
-    metadata_methods,               /* tp_methods */
-    0,                              /* tp_members */
-    metadata_getsetters,            /* tp_getset */
-    0,                              /* tp_base */
-    0,                              /* tp_dict */
-    0,                              /* tp_descr_get */
-    0,                              /* tp_descr_set */
-    0,                              /* tp_dictoffset */
-    (initproc)metadata_init,        /* tp_init */
-    0,                              /* tp_alloc */
-    metadata_new,                   /* tp_new */
-    0,                              /* tp_free */
-    0,                              /* tp_is_gc */
-    0,                              /* tp_bases */
-    0,                              /* tp_mro */
-    0,                              /* tp_cache */
-    0,                              /* tp_subclasses */
-    0,                              /* tp_weaklist */
-    0,                              /* tp_del */
-    0,                              /* tp_version_tag */
-    0,                              /* tp_finalize */
+    .tp_name = "createrepo_c.Metadata",
+    .tp_basicsize = sizeof(_MetadataObject),
+    .tp_dealloc = (destructor)metadata_dealloc,
+    .tp_repr = (reprfunc)metadata_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_doc = metadata_init__doc__,
+    .tp_iter = PyObject_SelfIter,
+    .tp_methods = metadata_methods,
+    .tp_getset = metadata_getsetters,
+    .tp_init = (initproc)metadata_init,
+    .tp_new = metadata_new,
 };

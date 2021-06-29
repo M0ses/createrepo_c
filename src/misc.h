@@ -139,6 +139,13 @@ struct cr_HeaderRangeStruct cr_get_header_byte_range(const char *filename,
  */
 char *cr_get_filename(const char *filepath);
 
+/** Return pointer to the rest of string after './' prefix.
+ * (e.g. for "././foo/bar" returns "foo/bar")
+ * @param filepath      path
+ * @return              pointer into the path
+ */
+char *cr_get_cleaned_href(const char *filepath);
+
 /** Download a file from the URL into the in_dst via curl handle.
  * @param handle        CURL handle
  * @param url           source url
@@ -179,7 +186,7 @@ gboolean cr_copy_file(const char *src,
 
 /** Compress file.
  * @param src           source filename
- * @param dst           pointer to destination (If dst is dir, filename of src +
+ * @param dst           destination (If dst is dir, filename of src +
  *                      compression suffix is used.
  *                      If dst is NULL, src + compression suffix is used)
  * @param comtype       type of compression
@@ -190,7 +197,7 @@ gboolean cr_copy_file(const char *src,
  * @return              cr_Error return code
  */
 int cr_compress_file_with_stat(const char *src,
-                               char **dst,
+                               const char *dst,
                                cr_CompressionType comtype,
                                cr_ContentStat *stat,
                                const char *zck_dict_dir,

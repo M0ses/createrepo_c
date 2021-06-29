@@ -76,6 +76,7 @@ test_cr_xml_parse_updateinfo_01(void)
     g_assert_cmpstr(update->summary, ==, "summary_1");
     g_assert_cmpstr(update->description, ==, "description_1");
     g_assert_cmpstr(update->solution, ==, "solution_1");
+    g_assert(update->reboot_suggested);
 
     g_assert_cmpint(g_slist_length(update->references), ==, 1);
     ref = update->references->data;
@@ -101,6 +102,8 @@ test_cr_xml_parse_updateinfo_01(void)
     g_assert_cmpstr(pkg->sum, ==, "29be985e1f652cd0a29ceed6a1c49964d3618bddd22f0be3292421c8777d26c8");
     g_assert_cmpint(pkg->sum_type, ==, CR_CHECKSUM_SHA256);
     g_assert(pkg->reboot_suggested);
+    g_assert(pkg->restart_suggested);
+    g_assert(pkg->relogin_suggested);
 
     cr_updateinfo_free(ui);
 }
@@ -137,6 +140,7 @@ test_cr_xml_parse_updateinfo_02(void)
     g_assert(!update->pushcount);
     g_assert(!update->severity);
     g_assert(!update->summary);
+    g_assert(!update->reboot_suggested);
     g_assert(!update->description);
     g_assert(!update->solution);
 
@@ -164,6 +168,8 @@ test_cr_xml_parse_updateinfo_02(void)
     g_assert(!pkg->sum);
     g_assert_cmpint(pkg->sum_type, ==, CR_CHECKSUM_UNKNOWN);
     g_assert(!pkg->reboot_suggested);
+    g_assert(!pkg->restart_suggested);
+    g_assert(!pkg->relogin_suggested);
 
     cr_updateinfo_free(ui);
 }
@@ -186,6 +192,10 @@ test_cr_xml_parse_updateinfo_03(void)
     g_assert_cmpint(ret, ==, CRE_OK);
 
     g_assert_cmpint(g_slist_length(ui->updates), ==, 6);
+
+    update = g_slist_nth_data(ui->updates, 2);
+    g_assert(!update->reboot_suggested);
+
     update = g_slist_nth_data(ui->updates, 3);
 
     g_assert_cmpstr(update->from, ==, "errata@redhat.com");
@@ -195,6 +205,7 @@ test_cr_xml_parse_updateinfo_03(void)
     g_assert_cmpstr(update->id, ==, "RHEA-2012:0058");
     g_assert_cmpstr(update->title, ==, "Gorilla_Erratum");
     g_assert_cmpstr(update->description, ==, "Gorilla_Erratum");
+    g_assert(update->reboot_suggested);
 
     update = g_slist_nth_data(ui->updates, 4);
 
@@ -204,6 +215,7 @@ test_cr_xml_parse_updateinfo_03(void)
     g_assert_cmpstr(update->issued_date, ==, "2018-01-27 16:08:09");
     g_assert_cmpstr(update->updated_date, ==, "2018-07-20 06:00:01 UTC");
     g_assert_cmpstr(update->release, ==, "1");
+    g_assert(update->reboot_suggested);
 
     g_assert_cmpint(g_slist_length(update->references), ==, 0);
 
@@ -247,6 +259,12 @@ test_cr_xml_parse_updateinfo_03(void)
     g_assert_cmpstr(pkg->name, ==, "duck");
     g_assert_cmpstr(pkg->version, ==, "0.7");
     g_assert_cmpstr(pkg->filename, ==, "duck-0.7-1.noarch.rpm");
+
+    update = g_slist_nth_data(ui->updates, 5);
+
+    g_assert_cmpstr(update->id, ==, "RHEA-2012:0060");
+    g_assert_cmpstr(update->issued_date, ==, "1555429284");
+    g_assert_cmpstr(update->updated_date, ==, "2018-07-29 06:00:01 UTC");
 
     cr_updateinfo_free(ui);
 }

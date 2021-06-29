@@ -13,7 +13,6 @@ Package build requires - Pkg name in Fedora/Ubuntu:
 * bzip2 (http://bzip.org/) - bzip2-devel/libbz2-dev
 * cmake (http://www.cmake.org/) - cmake/cmake
 * drpm (https://github.com/rpm-software-management/drpm) - drpm-devel/
-* expat (http://expat.sourceforge.net/) - expat-devel/libexpat1-dev
 * file (http://www.darwinsys.com/file/) - file-devel/libmagic-dev
 * glib2 (http://developer.gnome.org/glib/) - glib2-devel/libglib2.0-dev
 * libcurl (http://curl.haxx.se/libcurl/) - libcurl-devel/libcurl4-openssl-dev
@@ -27,9 +26,8 @@ Package build requires - Pkg name in Fedora/Ubuntu:
 * zchunk (https://github.com/zchunk/zchunk) - zchunk-devel/
 * zlib (http://www.zlib.net/) - zlib-devel/zlib1g-dev
 * *Documentation:* doxygen (http://doxygen.org/) - doxygen/doxygen
-* *Documentation:* sphinx (http://sphinx-doc.org/) - python-sphinx/python-sphinx
+* *Documentation:* sphinx (http://sphinx-doc.org/) - python3-sphinx/python3-sphinx
 * **Test requires:** check (http://check.sourceforge.net/) - check-devel/check
-* **Test requires:** python-nose (https://nose.readthedocs.org/) - python-nose/python-nose
 * **Test requires:** xz (http://tukaani.org/xz/) - xz/
 * **Test requires:** zchunk (https://github.com/zchunk/zchunk) - zchunk/
 
@@ -61,13 +59,6 @@ Commands I am using for building the RPM:
     cd /home/tmlcoch/git/rpm
     CPPFLAGS='-I/usr/include/nss3/ -I/usr/include/nspr4/' ./autogen.sh --rpmconfigure --with-vendor=redhat --with-external-db --with-lua --with-selinux --with-cap --with-acl --enable-python
     make clean && make
-
-## Building for a different Python version
-
-By default, cmake should set up things to build for Python 3, but you can do a build for Python 2 like this::
-
-    cmake -DPYTHON_DESIRED=2 .
-
 ## Other build options
 
 ### ``-DENABLE_LEGACY_WEAKDEPS=ON``
@@ -141,7 +132,7 @@ Modify createrepo_c.spec and run:
 
     utils/make_rpm.sh
 
-Note: [Current .spec for Fedora rawhide](http://pkgs.fedoraproject.org/cgit/createrepo_c.git/plain/createrepo_c.spec)
+Note: [Current .spec for Fedora rawhide](https://src.fedoraproject.org/rpms/createrepo_c/blob/master/f/createrepo_c.spec)
 
 ## Testing
 
@@ -155,17 +146,13 @@ Note: For a verbose output of testing use: ``make ARGS="-V" test``
 
 ### Run only C unittests (from your checkout dir):
 
-    build/tests/run_gtester.sh
+    build/tests/run_tests.sh
 
 Note: The C tests have to be built by ``make tests``)!
 
 ### Run only Python unittests (from your checkout dir):
 
-    PYTHONPATH=`readlink -f ./build/src/python/` nosetests -s tests/python/tests/
-
-Or, for an alternative python version, specify the appropriate nosetests executable:
-
-    PYTHONPATH=`readlink -f ./build/src/python/` nosetests-3.4 -s tests/python/tests/
+    PYTHONPATH=`readlink -f ./build/src/python/` python3 -m unittest discover -bs tests/python/
 
 Note: When compiling createrepo_c without libmodulemd support add ``WITH_LIBMODULEMD=OFF``
 
@@ -177,6 +164,36 @@ Note: When compiling createrepo_c without libmodulemd support add ``WITH_LIBMODU
 
 In original createrepo ``sha`` is a nickname for the ``sha1`` checksum.
 Createrepo_c mimics this behaviour.
+
+## Contribution
+
+Here's the most direct way to get your work merged into the project.
+
+1. Fork the project
+1. Clone down your fork
+1. Implement your feature or bug fix and commit changes
+1. If the change fixes a bug at [Red Hat bugzilla](https://bugzilla.redhat.com/), or if it is important to the end user, add the following block to the commit message:
+
+       = changelog =
+       msg:           message to be included in the changelog
+       type:          one of: bugfix/enhancement/security (this field is required when message is present)
+       resolves:      URLs to bugs or issues resolved by this commit (can be specified multiple times)
+       related:       URLs to any related bugs or issues (can be specified multiple times)
+
+   * For example::
+
+         = changelog =
+         msg: Enhance error handling when locating repositories
+         type: bugfix
+         resolves: https://bugzilla.redhat.com/show_bug.cgi?id=1762697
+
+   * For your convenience, you can also use git commit template by running the following command in the top-level directory of this project:
+
+         git config commit.template ./.git-commit-template
+
+1. In a separate commit, add your name and email into the [authors file](https://github.com/rpm-software-management/createrepo_c/blob/master/AUTHORS) as a reward for your generosity
+1. Push the branch to your fork
+1. Send a pull request for your branch
 
 ---------------------------------------------------
 
@@ -263,7 +280,7 @@ Createrepo_c mimics this behaviour.
 ## Mergerepo_c
 ### Default merge method
 - Original mergerepo included even packages with the same NVR by default
-- Mergerepo_c can be configured by --method option to specify how repositories should be merged. 
+- Mergerepo_c can be configured by --method option to specify how repositories should be merged.
 - Additionally its possible to use --all option to replicate original mergerepo behavior.
 
 ## Modifyrepo_c

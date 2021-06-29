@@ -142,12 +142,11 @@ getitem(_MetadataLocationObject *self, PyObject *pykey)
         return NULL;
     }
 
-    if (PyUnicode_Check(pykey)) {
-        pykey = PyUnicode_AsUTF8String(pykey);
+    pykey = PyObject_ToPyBytesOrNull(pykey);
+    if (!pykey) {
+        return NULL;
     }
-
     key = PyBytes_AsString(pykey);
-
     value = NULL;
 
     if (!strcmp(key, "primary")) {
@@ -183,17 +182,32 @@ getitem(_MetadataLocationObject *self, PyObject *pykey)
     } else if (!strcmp(key, "additional_metadata")){
         if (self->ml->additional_metadata){
             PyObject *list = PyList_New(0);
-            for (GSList *elem = self->ml->additional_metadata; elem; elem=g_slist_next(elem)){
-                PyList_Append(list, PyUnicode_FromString(((cr_Metadatum *)(elem->data))->name));
+            if (!list) {
+                Py_XDECREF(pykey);
+                return NULL;
             }
+            for (GSList *elem = self->ml->additional_metadata; elem; elem=g_slist_next(elem)){
+                PyObject *namestr = PyUnicode_FromString(((cr_Metadatum *)(elem->data))->name);
+                if (!namestr || PyList_Append(list, namestr)) {
+                    Py_DECREF(list);
+                    Py_XDECREF(pykey);
+                    return NULL;
+                } else {
+                    Py_DECREF(namestr);
+                }
+            }
+            Py_XDECREF(pykey);
             return list;
         }
     }
 
-    if (value)
+    Py_XDECREF(pykey);
+
+    if (value) {
         return PyUnicode_FromString(value);
-    else
+    } else {
         Py_RETURN_NONE;
+    }
 }
 
 static PyMappingMethods mapping_methods = {
@@ -206,51 +220,15 @@ static PyMappingMethods mapping_methods = {
 
 PyTypeObject MetadataLocation_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "createrepo_c.MetadataLocation",/* tp_name */
-    sizeof(_MetadataLocationObject),/* tp_basicsize */
-    0,                              /* tp_itemsize */
-    (destructor)metadatalocation_dealloc,/* tp_dealloc */
-    0,                              /* tp_print */
-    0,                              /* tp_getattr */
-    0,                              /* tp_setattr */
-    0,                              /* tp_compare */
-    (reprfunc)metadatalocation_repr,/* tp_repr */
-    0,                              /* tp_as_number */
-    0,                              /* tp_as_sequence */
-    &mapping_methods,               /* tp_as_mapping */
-    0,                              /* tp_hash */
-    0,                              /* tp_call */
-    0,                              /* tp_str */
-    0,                              /* tp_getattro */
-    0,                              /* tp_setattro */
-    0,                              /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE, /* tp_flags */
-    metadatalocation_init__doc__,   /* tp_doc */
-    0,                              /* tp_traverse */
-    0,                              /* tp_clear */
-    0,                              /* tp_richcompare */
-    0,                              /* tp_weaklistoffset */
-    PyObject_SelfIter,              /* tp_iter */
-    0,                              /* tp_iternext */
-    metadatalocation_methods,       /* tp_methods */
-    0,                              /* tp_members */
-    0,                              /* tp_getset */
-    0,                              /* tp_base */
-    0,                              /* tp_dict */
-    0,                              /* tp_descr_get */
-    0,                              /* tp_descr_set */
-    0,                              /* tp_dictoffset */
-    (initproc)metadatalocation_init,/* tp_init */
-    0,                              /* tp_alloc */
-    metadatalocation_new,           /* tp_new */
-    0,                              /* tp_free */
-    0,                              /* tp_is_gc */
-    0,                              /* tp_bases */
-    0,                              /* tp_mro */
-    0,                              /* tp_cache */
-    0,                              /* tp_subclasses */
-    0,                              /* tp_weaklist */
-    0,                              /* tp_del */
-    0,                              /* tp_version_tag */
-    0,                              /* tp_finalize */
+    .tp_name = "createrepo_c.MetadataLocation",
+    .tp_basicsize = sizeof(_MetadataLocationObject),
+    .tp_dealloc = (destructor)metadatalocation_dealloc,
+    .tp_repr = (reprfunc)metadatalocation_repr,
+    .tp_as_mapping = &mapping_methods,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_doc = metadatalocation_init__doc__,
+    .tp_iter = PyObject_SelfIter,
+    .tp_methods = metadatalocation_methods,
+    .tp_init = (initproc)metadatalocation_init,
+    .tp_new = metadatalocation_new,
 };

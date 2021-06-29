@@ -249,6 +249,16 @@ static ListConvertor list_convertors[] = {
 #define OFFSET(member) (void *) offsetof(cr_UpdateRecord, member)
 
 static PyObject *
+get_int(_UpdateRecordObject *self, void *member_offset)
+{
+    if (check_UpdateRecordStatus(self))
+        return NULL;
+    cr_UpdateRecord *rec = self->record;
+    gint64 val = *((int *) ((size_t) rec + (size_t) member_offset));
+    return PyLong_FromLongLong((long long) val);
+}
+
+static PyObject *
 get_str(_UpdateRecordObject *self, void *member_offset)
 {
     if (check_UpdateRecordStatus(self))
@@ -277,13 +287,25 @@ get_datetime(_UpdateRecordObject *self, void *member_offset)
     if (res == NULL) {
         memset(dt, 0, sizeof(struct tm));
         res = strptime(str, "%Y-%m-%d", dt);
-        if (res == NULL)
-           PyErr_SetString(CrErr_Exception, "Invalid date");
+        if (res == NULL) {
+            g_free(dt);
+            // Try to convert the whole string to a number if it passes it's likely in epoch format
+            char *t;
+            long long int epoch = strtoll(str, &t, 10);
+            if(*t == '\0') {
+                return PyLong_FromLongLong(epoch);
+            } else {
+                char err[55];
+                snprintf(err, 55, "Unable to parse updateinfo record date: %s", str);
+                PyErr_SetString(CrErr_Exception, err);
+                return NULL;
+            }
+        }
     }
     PyObject *py_dt = PyDateTime_FromDateAndTime(dt->tm_year + 1900,
                                       dt->tm_mon + 1, dt->tm_mday,
                                       dt->tm_hour, dt->tm_min, dt->tm_sec, 0);
-    free(dt);
+    g_free(dt);
     return py_dt;
 }
 
@@ -312,6 +334,25 @@ get_list(_UpdateRecordObject *self, void *conv)
 }
 
 static int
+set_int(_UpdateRecordObject *self, PyObject *value, void *member_offset)
+{
+    long val;
+    if (check_UpdateRecordStatus(self))
+        return -1;
+    if (PyLong_Check(value)) {
+        val = PyLong_AsLong(value);
+    } else if (PyFloat_Check(value)) {
+        val = (long long) PyFloat_AS_DOUBLE(value);
+    } else {
+        PyErr_SetString(PyExc_TypeError, "Number expected!");
+        return -1;
+    }
+    cr_UpdateRecord *rec = self->record;
+    *((int *) ((size_t) rec + (size_t) member_offset)) = (int) val;
+    return 0;
+}
+
+static int
 set_str(_UpdateRecordObject *self, PyObject *value, void *member_offset)
 {
     if (check_UpdateRecordStatus(self))
@@ -321,8 +362,7 @@ set_str(_UpdateRecordObject *self, PyObject *value, void *member_offset)
         return -1;
     }
     cr_UpdateRecord *rec = self->record;
-    char *str = cr_safe_string_chunk_insert(rec->chunk,
-                                            PyObject_ToStrOrNull(value));
+    char *str = PyObject_ToChunkedString(value, rec->chunk);
     *((char **) ((size_t) rec + (size_t) member_offset)) = str;
     return 0;
 }
@@ -334,18 +374,41 @@ set_datetime(_UpdateRecordObject *self, PyObject *value, void *member_offset)
 
     if (check_UpdateRecordStatus(self))
         return -1;
-    if (!PyDateTime_Check(value) && value != Py_None) {
-        PyErr_SetString(PyExc_TypeError, "DateTime or None expected!");
+
+    if (value == Py_None) {
+        return 0;
+    }
+
+    cr_UpdateRecord *rec = self->record;
+
+    if (PyLong_Check(value)) {
+        unsigned long long epoch = PyLong_AsUnsignedLongLong(value);
+        /* Length 13 is plenty of space for epoch. */
+        char *date = malloc(13 * sizeof(char));
+
+        int ret = snprintf(date, 13, "%llu", epoch);
+        if (ret < 0 || ret > 12){
+            PyErr_SetString(PyExc_TypeError, "Invalid epoch value!");
+            free(date);
+            return -1;
+        }
+        char *str = cr_safe_string_chunk_insert(rec->chunk, date);
+        free(date);
+        *((char **) ((size_t) rec + (size_t) member_offset)) = str;
+        return 0;
+    }
+
+    if (!PyDateTime_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "DateTime, integer epoch or None expected!");
         return -1;
     }
-    cr_UpdateRecord *rec = self->record;
 
     /* Length is 20: yyyy-mm-dd HH:MM:SS */
     char *date = malloc(20 * sizeof(char));
     snprintf(date, 20, "%04d-%02d-%02d %02d:%02d:%02d",
-             PyDateTime_GET_YEAR(value), PyDateTime_GET_MONTH(value),
-             PyDateTime_GET_DAY(value), PyDateTime_DATE_GET_HOUR(value),
-             PyDateTime_DATE_GET_MINUTE(value), PyDateTime_DATE_GET_SECOND(value));
+             PyDateTime_GET_YEAR(value) % 9999, PyDateTime_GET_MONTH(value) % 13,
+             PyDateTime_GET_DAY(value) % 32, PyDateTime_DATE_GET_HOUR(value) % 24,
+             (PyDateTime_DATE_GET_MINUTE(value) % 60), PyDateTime_DATE_GET_SECOND(value) % 60);
 
     char *str = cr_safe_string_chunk_insert(rec->chunk, date);
     free(date);
@@ -388,6 +451,8 @@ static PyGetSetDef updaterecord_getsetters[] = {
         "List of UpdateReferences", &(list_convertors[0])},
     {"collections",                 (getter)get_list, (setter)NULL,
         "List of UpdateCollections", &(list_convertors[1])},
+    {"reboot_suggested",            (getter)get_int, (setter)set_int,
+        "Suggested reboot",         OFFSET(reboot_suggested)},
     {NULL, NULL, NULL, NULL, NULL} /* sentinel */
 };
 
@@ -395,51 +460,15 @@ static PyGetSetDef updaterecord_getsetters[] = {
 
 PyTypeObject UpdateRecord_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "createrepo_c.UpdateRecord",    /* tp_name */
-    sizeof(_UpdateRecordObject),    /* tp_basicsize */
-    0,                              /* tp_itemsize */
-    (destructor) updaterecord_dealloc, /* tp_dealloc */
-    0,                              /* tp_print */
-    0,                              /* tp_getattr */
-    0,                              /* tp_setattr */
-    0,                              /* tp_compare */
-    (reprfunc) updaterecord_repr,   /* tp_repr */
-    0,                              /* tp_as_number */
-    0,                              /* tp_as_sequence */
-    0,                              /* tp_as_mapping */
-    0,                              /* tp_hash */
-    0,                              /* tp_call */
-    0,                              /* tp_str */
-    0,                              /* tp_getattro */
-    0,                              /* tp_setattro */
-    0,                              /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE, /* tp_flags */
-    updaterecord_init__doc__,       /* tp_doc */
-    0,                              /* tp_traverse */
-    0,                              /* tp_clear */
-    0,                              /* tp_richcompare */
-    0,                              /* tp_weaklistoffset */
-    PyObject_SelfIter,              /* tp_iter */
-    0,                              /* tp_iternext */
-    updaterecord_methods,           /* tp_methods */
-    0,                              /* tp_members */
-    updaterecord_getsetters,        /* tp_getset */
-    0,                              /* tp_base */
-    0,                              /* tp_dict */
-    0,                              /* tp_descr_get */
-    0,                              /* tp_descr_set */
-    0,                              /* tp_dictoffset */
-    (initproc) updaterecord_init,   /* tp_init */
-    0,                              /* tp_alloc */
-    updaterecord_new,               /* tp_new */
-    0,                              /* tp_free */
-    0,                              /* tp_is_gc */
-    0,                              /* tp_bases */
-    0,                              /* tp_mro */
-    0,                              /* tp_cache */
-    0,                              /* tp_subclasses */
-    0,                              /* tp_weaklist */
-    0,                              /* tp_del */
-    0,                              /* tp_version_tag */
-    0,                              /* tp_finalize */
+    .tp_name = "createrepo_c.UpdateRecord",
+    .tp_basicsize = sizeof(_UpdateRecordObject),
+    .tp_dealloc = (destructor) updaterecord_dealloc,
+    .tp_repr = (reprfunc) updaterecord_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_doc = updaterecord_init__doc__,
+    .tp_iter = PyObject_SelfIter,
+    .tp_methods = updaterecord_methods,
+    .tp_getset = updaterecord_getsetters,
+    .tp_init = (initproc) updaterecord_init,
+    .tp_new = updaterecord_new,
 };

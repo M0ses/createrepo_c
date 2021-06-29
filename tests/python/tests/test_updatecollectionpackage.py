@@ -22,6 +22,8 @@ class TestCaseUpdateCollectionPackage(unittest.TestCase):
         self.assertEqual(pkg.sum, None)
         self.assertEqual(pkg.sum_type, 0)
         self.assertEqual(pkg.reboot_suggested, 0)
+        self.assertEqual(pkg.restart_suggested, 0)
+        self.assertEqual(pkg.relogin_suggested, 0)
 
         pkg.name = "foo"
         pkg.version = "1.2"
@@ -33,6 +35,8 @@ class TestCaseUpdateCollectionPackage(unittest.TestCase):
         pkg.sum = "abcdef"
         pkg.sum_type = cr.SHA1
         pkg.reboot_suggested = True
+        pkg.restart_suggested = True
+        pkg.relogin_suggested = True
 
         self.assertEqual(pkg.name, "foo")
         self.assertEqual(pkg.version, "1.2")
@@ -44,3 +48,5 @@ class TestCaseUpdateCollectionPackage(unittest.TestCase):
         self.assertEqual(pkg.sum, "abcdef")
         self.assertEqual(pkg.sum_type, cr.SHA1)
         self.assertEqual(pkg.reboot_suggested, True)
+        self.assertEqual(pkg.restart_suggested, True)
+        self.assertEqual(pkg.relogin_suggested, True)

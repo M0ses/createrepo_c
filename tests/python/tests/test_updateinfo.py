@@ -36,6 +36,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
         rec.summary = "summary"
         rec.description = "description"
         rec.solution = "solution"
+        rec.reboot_suggested = True
 
         ui.append(rec)
 
@@ -57,8 +58,27 @@ class TestCaseUpdateInfo(unittest.TestCase):
         self.assertEqual(rec.summary, "summary")
         self.assertEqual(rec.description, "description")
         self.assertEqual(rec.solution, "solution")
+        self.assertEqual(rec.reboot_suggested, True)
         self.assertEqual(len(rec.references), 0)
         self.assertEqual(len(rec.collections), 0)
+
+        rec = cr.UpdateRecord()
+        rec.issued_date = int(now.timestamp())
+        ui.append(rec)
+
+        self.assertEqual(len(ui.updates), 2)
+        rec = ui.updates[1]
+        self.assertEqual(rec.issued_date, int(now.timestamp()))
+
+    def test_updateinfo_getter(self):
+        ui = cr.UpdateInfo(TEST_UPDATEINFO_03)
+        self.assertTrue(ui)
+
+        self.assertEqual(len(ui.updates), 6)
+
+        rec = ui.updates[2]
+        self.assertRaisesRegex(cr.CreaterepoCError, "Unable to parse updateinfo record date: 15mangled2",
+                               rec.__getattribute__, "issued_date")
 
     def test_updateinfo_xml_dump_01(self):
         ui = cr.UpdateInfo()
@@ -92,6 +112,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
         rec.summary = "summary"
         rec.description = "description"
         rec.solution = "solution"
+        rec.reboot_suggested = True
 
         ui.append(rec)
         xml = ui.xml_dump()
@@ -111,6 +132,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
     <summary>summary</summary>
     <description>description</description>
     <solution>solution</solution>
+    <reboot_suggested>True</reboot_suggested>
     <references/>
     <pkglist/>
   </update>
@@ -141,6 +163,8 @@ class TestCaseUpdateInfo(unittest.TestCase):
         pkg.sum = "abcdef"
         pkg.sum_type = cr.SHA1
         pkg.reboot_suggested = True
+        pkg.restart_suggested = True
+        pkg.relogin_suggested = True
 
         col = cr.UpdateCollection()
         col.shortname = "short name"
@@ -203,7 +227,9 @@ class TestCaseUpdateInfo(unittest.TestCase):
         <package name="foo" version="1.2" release="3" epoch="0" arch="x86" src="foo.src.rpm">
           <filename>foo.rpm</filename>
           <sum type="sha1">abcdef</sum>
-          <reboot_suggested/>
+          <reboot_suggested>True</reboot_suggested>
+          <restart_suggested>True</restart_suggested>
+          <relogin_suggested>True</relogin_suggested>
         </package>
       </collection>
     </pkglist>
@@ -289,7 +315,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
         <package name="foo" version="1.2" release="3" epoch="0" arch="x86" src="foo.src.rpm">
           <filename>foo.rpm</filename>
           <sum type="sha1">abcdef</sum>
-          <reboot_suggested/>
+          <reboot_suggested>True</reboot_suggested>
         </package>
       </collection>
     </pkglist>
@@ -320,6 +346,8 @@ class TestCaseUpdateInfo(unittest.TestCase):
         pkg.sum = "abcdef"
         pkg.sum_type = cr.SHA1
         pkg.reboot_suggested = True
+        pkg.restart_suggested = True
+        pkg.relogin_suggested = True
 
         col = cr.UpdateCollection()
         col.shortname = "short name"
@@ -340,7 +368,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
         rec.version = "version"
         rec.id = "id"
         rec.title = "title"
-        rec.issued_date = now
+        rec.issued_date = int(now.timestamp())
         rec.updated_date = now
         rec.rights = "rights"
         rec.release = "release"
@@ -349,6 +377,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
         rec.summary = "summary"
         rec.description = "description"
         rec.solution = "solution"
+        rec.reboot_suggested = True
         rec.append_collection(col)
         rec.append_reference(ref)
 
@@ -363,7 +392,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
   <update from="from" status="status" type="type" version="version">
     <id>id</id>
     <title>title</title>
-    <issued date="%(now)s"/>
+    <issued date="%(now_epoch)s"/>
     <updated date="%(now)s"/>
     <rights>rights</rights>
     <release>release</release>
@@ -372,6 +401,7 @@ class TestCaseUpdateInfo(unittest.TestCase):
     <summary>summary</summary>
     <description>description</description>
     <solution>solution</solution>
+    <reboot_suggested>True</reboot_suggested>
     <references>
       <reference href="href" id="id" type="type" title="title"/>
     </references>
@@ -382,10 +412,12 @@ class TestCaseUpdateInfo(unittest.TestCase):
         <package name="foo" version="1.2" release="3" epoch="0" arch="x86" src="foo.src.rpm">
           <filename>foo.rpm</filename>
           <sum type="sha1">abcdef</sum>
-          <reboot_suggested/>
+          <reboot_suggested>True</reboot_suggested>
+          <restart_suggested>True</restart_suggested>
+          <relogin_suggested>True</relogin_suggested>
         </package>
       </collection>
     </pkglist>
   </update>
 </updates>
-""" % {"now": now.strftime("%Y-%m-%d %H:%M:%S")})
+""" % {"now": now.strftime("%Y-%m-%d %H:%M:%S"), "now_epoch": now.strftime('%s')})

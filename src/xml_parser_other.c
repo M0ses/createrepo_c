@@ -23,7 +23,6 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
-#include <expat.h>
 #include "xml_parser_internal.h"
 #include "xml_parser.h"
 #include "error.h"
@@ -43,7 +42,7 @@ typedef enum {
 } cr_OthState;
 
 /* NOTE: Same states in the first column must be together!!!
- * Performance tip: More frequent elements shoud be listed
+ * Performance tip: More frequent elements should be listed
  * first in its group (eg: element "package" (STATE_PACKAGE)
  * has a "file" element listed first, because it is more frequent
  * than a "version" element). */
@@ -56,7 +55,7 @@ static cr_StatesSwitch stateswitches[] = {
 };
 
 static void XMLCALL
-cr_start_handler(void *pdata, const char *element, const char **attr)
+cr_start_handler(void *pdata, const xmlChar *element, const xmlChar **attr)
 {
     GError *tmp_err = NULL;
     cr_ParserData *pd = pdata;
@@ -82,7 +81,7 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
 
     // Find current state by its name
     for (sw = pd->swtab[pd->state]; sw->from == pd->state; sw++)
-        if (!strcmp(element, sw->ename))
+        if (!strcmp((char *) element, sw->ename))
             break;
     if (sw->from != pd->state) {
         // No state for current element (unknown element)
@@ -129,7 +128,7 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
                            "Missing attribute \"arch\" of a package element");
 
         // Get package object to store current package or NULL if
-        // current XML package element shoud be skipped/ignored.
+        // current XML package element should be skipped/ignored.
         if (pd->newpkgcb(&pd->pkg,
                          pkgId,
                          name,
@@ -210,7 +209,7 @@ cr_start_handler(void *pdata, const char *element, const char **attr)
 }
 
 static void XMLCALL
-cr_end_handler(void *pdata, G_GNUC_UNUSED const char *element)
+cr_end_handler(void *pdata, G_GNUC_UNUSED const xmlChar *element)
 {
     cr_ParserData *pd = pdata;
     GError *tmp_err = NULL;
@@ -279,21 +278,21 @@ cr_end_handler(void *pdata, G_GNUC_UNUSED const char *element)
 }
 
 int
-cr_xml_parse_other(const char *path,
-                   cr_XmlParserNewPkgCb newpkgcb,
-                   void *newpkgcb_data,
-                   cr_XmlParserPkgCb pkgcb,
-                   void *pkgcb_data,
-                   cr_XmlParserWarningCb warningcb,
-                   void *warningcb_data,
-                   GError **err)
+cr_xml_parse_other_internal(const char *target,
+                            cr_XmlParserNewPkgCb newpkgcb,
+                            void *newpkgcb_data,
+                            cr_XmlParserPkgCb pkgcb,
+                            void *pkgcb_data,
+                            cr_XmlParserWarningCb warningcb,
+                            void *warningcb_data,
+                            int (*parser_func)(xmlParserCtxtPtr, cr_ParserData *, const char *, GError**),
+                            GError **err)
 {
     int ret = CRE_OK;
     cr_ParserData *pd;
-    XML_Parser parser;
     GError *tmp_err = NULL;
 
-    assert(path);
+    assert(target);
     assert(newpkgcb || pkgcb);
     assert(!err || *err == NULL);
 
@@ -301,13 +300,18 @@ cr_xml_parse_other(const char *path,
         newpkgcb = cr_newpkgcb;
 
     // Init
-
-    parser = XML_ParserCreate(NULL);
-    XML_SetElementHandler(parser, cr_start_handler, cr_end_handler);
-    XML_SetCharacterDataHandler(parser, cr_char_handler);
+    xmlSAXHandler sax;
+    memset(&sax, 0, sizeof(sax));
+    sax.startElement = cr_start_handler;
+    sax.endElement = cr_end_handler;
+    sax.characters = cr_char_handler;
 
     pd = cr_xml_parser_data(NUMSTATES);
-    pd->parser = &parser;
+
+    xmlParserCtxtPtr parser;
+    parser = xmlCreatePushParserCtxt(&sax, pd, NULL, 0, NULL);
+
+    pd->parser = parser;
     pd->state = STATE_START;
     pd->newpkgcb_data = newpkgcb_data;
     pd->newpkgcb = newpkgcb;
@@ -321,11 +325,10 @@ cr_xml_parse_other(const char *path,
         pd->sbtab[sw->to] = sw->from;
     }
 
-    XML_SetUserData(parser, pd);
-
     // Parsing
 
-    ret = cr_xml_parser_generic(parser, pd, path, &tmp_err);
+    ret = parser_func(parser, pd, target, &tmp_err);
+
     if (tmp_err)
         g_propagate_error(err, tmp_err);
 
@@ -333,9 +336,9 @@ cr_xml_parse_other(const char *path,
 
     if (!pd->main_tag_found && ret == CRE_OK)
         cr_xml_parser_warning(pd, CR_XML_WARNING_BADMDTYPE,
-                          "The file don't contain the expected element "
-                          "\"<otherdata>\" - The file probably isn't "
-                          "a valid other.xml");
+                          "The target doesn't contain the expected element "
+                          "\"<otherdata>\" - The target probably isn't "
+                          "a valid other xml");
 
     // Clean up
 
@@ -350,7 +353,38 @@ cr_xml_parse_other(const char *path,
     }
 
     cr_xml_parser_data_free(pd);
-    XML_ParserFree(parser);
+    xmlFreeParserCtxt(parser);
 
+    return ret;
+}
+
+int
+cr_xml_parse_other(const char *path,
+                   cr_XmlParserNewPkgCb newpkgcb,
+                   void *newpkgcb_data,
+                   cr_XmlParserPkgCb pkgcb,
+                   void *pkgcb_data,
+                   cr_XmlParserWarningCb warningcb,
+                   void *warningcb_data,
+                   GError **err)
+{
+    return cr_xml_parse_other_internal(path, newpkgcb, newpkgcb_data, pkgcb, pkgcb_data,
+                                       warningcb, warningcb_data, &cr_xml_parser_generic, err);
+}
+
+int
+cr_xml_parse_other_snippet(const char *xml_string,
+                           cr_XmlParserNewPkgCb newpkgcb,
+                           void *newpkgcb_data,
+                           cr_XmlParserPkgCb pkgcb,
+                           void *pkgcb_data,
+                           cr_XmlParserWarningCb warningcb,
+                           void *warningcb_data,
+                           GError **err)
+{
+    char* wrapped_xml_string = g_strconcat("<otherdata>", xml_string, "</otherdata>", NULL);
+    int ret = cr_xml_parse_other_internal(wrapped_xml_string, newpkgcb, newpkgcb_data, pkgcb, pkgcb_data,
+                                          warningcb, warningcb_data, &cr_xml_parser_generic_from_string, err);
+    free(wrapped_xml_string);
     return ret;
 }

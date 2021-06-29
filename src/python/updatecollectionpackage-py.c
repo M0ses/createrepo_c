@@ -177,10 +177,6 @@ set_int(_UpdateCollectionPackageObject *self, PyObject *value, void *member_offs
         val = PyLong_AsLong(value);
     } else if (PyFloat_Check(value)) {
         val = (long long) PyFloat_AS_DOUBLE(value);
-#if PY_MAJOR_VERSION < 3
-    } else if (PyInt_Check(value)) {
-        val = PyInt_AS_LONG(value);
-#endif
     } else {
         PyErr_SetString(PyExc_TypeError, "Number expected!");
         return -1;
@@ -200,8 +196,7 @@ set_str(_UpdateCollectionPackageObject *self, PyObject *value, void *member_offs
         return -1;
     }
     cr_UpdateCollectionPackage *pkg = self->pkg;
-    char *str = cr_safe_string_chunk_insert(pkg->chunk,
-                                            PyObject_ToStrOrNull(value));
+    char *str = PyObject_ToChunkedString(value, pkg->chunk);
     *((char **) ((size_t) pkg + (size_t) member_offset)) = str;
     return 0;
 }
@@ -226,7 +221,11 @@ static PyGetSetDef updatecollectionpackage_getsetters[] = {
     {"sum_type",            (getter)get_int, (setter)set_int,
         "Type of checksum", OFFSET(sum_type)},
     {"reboot_suggested",    (getter)get_int, (setter)set_int,
-        "Size of the file", OFFSET(reboot_suggested)},
+        "Suggested reboot", OFFSET(reboot_suggested)},
+    {"restart_suggested",   (getter)get_int, (setter)set_int,
+        "Suggested restart",OFFSET(restart_suggested)},
+    {"relogin_suggested",   (getter)get_int, (setter)set_int,
+        "Suggested relogin",OFFSET(relogin_suggested)},
     {NULL, NULL, NULL, NULL, NULL} /* sentinel */
 };
 
@@ -234,51 +233,15 @@ static PyGetSetDef updatecollectionpackage_getsetters[] = {
 
 PyTypeObject UpdateCollectionPackage_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "createrepo_c.UpdateCollectionPackage",     /* tp_name */
-    sizeof(_UpdateCollectionPackageObject),     /* tp_basicsize */
-    0,                                          /* tp_itemsize */
-    (destructor) updatecollectionpackage_dealloc,/* tp_dealloc */
-    0,                                          /* tp_print */
-    0,                                          /* tp_getattr */
-    0,                                          /* tp_setattr */
-    0,                                          /* tp_compare */
-    (reprfunc) updatecollectionpackage_repr,    /* tp_repr */
-    0,                                          /* tp_as_number */
-    0,                                          /* tp_as_sequence */
-    0,                                          /* tp_as_mapping */
-    0,                                          /* tp_hash */
-    0,                                          /* tp_call */
-    0,                                          /* tp_str */
-    0,                                          /* tp_getattro */
-    0,                                          /* tp_setattro */
-    0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,     /* tp_flags */
-    updatecollectionpackage_init__doc__,        /* tp_doc */
-    0,                                          /* tp_traverse */
-    0,                                          /* tp_clear */
-    0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
-    PyObject_SelfIter,                          /* tp_iter */
-    0,                                          /* tp_iternext */
-    updatecollectionpackage_methods,            /* tp_methods */
-    0,                                          /* tp_members */
-    updatecollectionpackage_getsetters,         /* tp_getset */
-    0,                                          /* tp_base */
-    0,                                          /* tp_dict */
-    0,                                          /* tp_descr_get */
-    0,                                          /* tp_descr_set */
-    0,                                          /* tp_dictoffset */
-    (initproc) updatecollectionpackage_init,    /* tp_init */
-    0,                                          /* tp_alloc */
-    updatecollectionpackage_new,                /* tp_new */
-    0,                                          /* tp_free */
-    0,                                          /* tp_is_gc */
-    0,                                          /* tp_bases */
-    0,                                          /* tp_mro */
-    0,                                          /* tp_cache */
-    0,                                          /* tp_subclasses */
-    0,                                          /* tp_weaklist */
-    0,                                          /* tp_del */
-    0,                                          /* tp_version_tag */
-    0,                                          /* tp_finalize */
+    .tp_name = "createrepo_c.UpdateCollectionPackage",
+    .tp_basicsize = sizeof(_UpdateCollectionPackageObject),
+    .tp_dealloc = (destructor) updatecollectionpackage_dealloc,
+    .tp_repr = (reprfunc) updatecollectionpackage_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_doc = updatecollectionpackage_init__doc__,
+    .tp_iter = PyObject_SelfIter,
+    .tp_methods = updatecollectionpackage_methods,
+    .tp_getset = updatecollectionpackage_getsetters,
+    .tp_init = (initproc) updatecollectionpackage_init,
+    .tp_new = updatecollectionpackage_new,
 };

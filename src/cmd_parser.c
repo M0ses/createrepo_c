@@ -64,6 +64,7 @@ struct CmdOptions _cmd_options = {
 
         .zck_compression            = FALSE,
         .zck_dict_dir               = NULL,
+        .recycle_pkglist            = FALSE,
     };
 
 
@@ -79,7 +80,7 @@ static GOptionEntry cmd_entries[] =
     { "verbose", 'v', 0, G_OPTION_ARG_NONE, &(_cmd_options.verbose),
       "Run verbosely.", NULL },
     { "excludes", 'x', 0, G_OPTION_ARG_FILENAME_ARRAY, &(_cmd_options.excludes),
-      "File globs to exclude, can be specified multiple times.", "PACKAGE_NAME_GLOB" },
+      "Path patterns to exclude, can be specified multiple times.", "PACKAGE_NAME_GLOB" },
     { "basedir", 0, 0, G_OPTION_ARG_FILENAME, &(_cmd_options.basedir),
       "Basedir for path to directories.", "BASEDIR" },
     { "baseurl", 'u', 0, G_OPTION_ARG_FILENAME, &(_cmd_options.location_base),
@@ -103,7 +104,8 @@ static GOptionEntry cmd_entries[] =
       "large repository with only a few new or modified rpms "
       "this can significantly reduce I/O and processing time.", NULL },
     { "update-md-path", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &(_cmd_options.update_md_paths),
-      "Use the existing repodata for --update from this path.", NULL },
+      "Existing metadata from this path are loaded and reused in addition to those "
+      "present in the outputdir (works only with --update). Can be specified multiple times.", NULL },
     { "skip-stat", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.skip_stat),
       "Skip the stat() call on a --update, assumes if the filename is the same "
       "then the file is still the same (only use this if you're fairly "
@@ -145,7 +147,7 @@ static GOptionEntry cmd_entries[] =
       "User-specified revision for this repository.", "REVISION" },
     { "set-timestamp-to-revision", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.set_timestamp_to_revision),
       "Set timestamp fields in repomd.xml and last modification times of created repodata to a value given with --revision. "
-      "This requires --revision to be a timestamp formated in 'date +%s' format.", NULL },
+      "This requires --revision to be a timestamp formatted in 'date +%s' format.", NULL },
     { "read-pkgs-list", 0, 0, G_OPTION_ARG_FILENAME, &(_cmd_options.read_pkgs_list),
       "Output the paths to the pkgs actually read useful with --update.",
       "READ_PKGS_LIST" },
@@ -202,6 +204,10 @@ static GOptionEntry cmd_entries[] =
       "Checksum type to be used in repomd.xml", "CHECKSUM_TYPE"},
     { "error-exit-val", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.error_exit_val),
       "Exit with retval 2 if there were any errors during processing", NULL },
+    { "recycle-pkglist", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.recycle_pkglist),
+      "Read the list of packages from old metadata directory and re-use it.  This "
+      "option is only useful with --update (complements --pkglist and friends).",
+      NULL },
     { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL },
 };
 
@@ -211,12 +217,12 @@ static GOptionEntry expert_entries[] =
     { "ignore-lock", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.ignore_lock),
       "Expert (risky) option: Ignore an existing .repodata/. "
       "(Remove the existing .repodata/ and create an empty new one "
-      "to serve as a lock for other createrepo intances. For the repodata "
+      "to serve as a lock for other createrepo instances. For the repodata "
       "generation, a different temporary dir with the name in format "
       "\".repodata.time.microseconds.pid/\" will be used). "
       "NOTE: Use this option on your "
       "own risk! If two createrepos run simultaneously, then the state of the "
-      "generated metadata is not guaranted - it can be inconsistent and wrong.",
+      "generated metadata is not guaranteed - it can be inconsistent and wrong.",
       NULL },
     { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL },
 };
@@ -584,7 +590,7 @@ check_arguments(struct CmdOptions *options,
     // Check cut_dirs
     if (options->cut_dirs < 0) {
         g_set_error(err, ERR_DOMAIN, CRE_BADARG,
-                    "--cur-dirs value must be possitive integer");
+                    "--cur-dirs value must be positive integer");
         return FALSE;
     }
 
@@ -631,5 +637,6 @@ free_options(struct CmdOptions *options)
     cr_slist_free_full(options->l_update_md_paths, g_free);
     cr_slist_free_full(options->distro_cpeids, g_free);
     cr_slist_free_full(options->distro_values, g_free);
+    cr_slist_free_full(options->modulemd_metadata, g_free);
     g_slist_free(options->oldpackagedirs_paths);
 }
