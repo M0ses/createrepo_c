@@ -116,6 +116,20 @@ cr_latin1_to_utf8(const unsigned char *in, unsigned char *out)
     *out = '\0';
 }
 
+static void
+cr_delete_controlchars(const unsigned char *in, unsigned char *out)
+{
+    while (*in) {
+        if (*in < 32 && (*in != 9 && *in != 10 && *in != 13)) {
+            g_warning("Found forbidden control character '%d' in string '%s'", *in, in);
+            ++in;
+            continue;
+        }
+        *out++=*in++;
+    }
+    *out = '\0';
+}
+
 xmlNodePtr
 cr_xmlNewTextChild(xmlNodePtr parent,
                    xmlNsPtr ns,
@@ -129,7 +143,14 @@ cr_xmlNewTextChild(xmlNodePtr parent,
     if (!orig_content) {
         content = BAD_CAST "";
     } else if (xmlCheckUTF8(orig_content)) {
-        content = (xmlChar *) orig_content;
+        if (cr_hascontrollchars(orig_content)) {
+            size_t len = strlen((const char *) orig_content);
+            content = malloc(sizeof(xmlChar)*len + 1);
+            cr_delete_controlchars(orig_content, content);
+            free_content = 1;
+        } else {
+            content = (xmlChar *) orig_content;
+        }
     } else {
         size_t len = strlen((const char *) orig_content);
         content = malloc(sizeof(xmlChar)*len*2 + 1);
