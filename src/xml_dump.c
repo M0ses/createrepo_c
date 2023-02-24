@@ -38,12 +38,14 @@ cr_xml_dump_init()
 
     /* Default Settings for parameters */
     _xml_dump_parameters[CR_XML_DUMP_DO_PRETTY_PRINT] = TRUE;
+    _xml_dump_parameters[CR_XML_DUMP_CLEANUP_CHANGELOG] = CLEANUP_CHANGELOG_DEFAULT;
 }
 
 void cr_xml_dump_set_parameter(cr_dump_parameter param, int value)
 {
     switch(param) {
         case CR_XML_DUMP_DO_PRETTY_PRINT:
+        case CR_XML_DUMP_CLEANUP_CHANGELOG:
             _xml_dump_parameters[param] = value;
         break;
         default:
@@ -57,6 +59,7 @@ void cr_xml_dump_set_parameter(cr_dump_parameter param, int value)
 int cr_xml_dump_get_parameter(cr_dump_parameter param) {
     switch (param) {
         case CR_XML_DUMP_DO_PRETTY_PRINT:
+        case CR_XML_DUMP_CLEANUP_CHANGELOG:
             return _xml_dump_parameters[param];
         default:
             break;
@@ -116,6 +119,20 @@ cr_latin1_to_utf8(const unsigned char *in, unsigned char *out)
     *out = '\0';
 }
 
+static void
+cr_delete_controlchars(const unsigned char *in, unsigned char *out)
+{
+    while (*in) {
+        if (*in < 32 && (*in != 9 && *in != 10 && *in != 13)) {
+            g_warning("Found forbidden control character '%d' in string '%s'", *in, in);
+            ++in;
+            continue;
+        }
+        *out++=*in++;
+    }
+    *out = '\0';
+}
+
 xmlNodePtr
 cr_xmlNewTextChild(xmlNodePtr parent,
                    xmlNsPtr ns,
@@ -129,7 +146,14 @@ cr_xmlNewTextChild(xmlNodePtr parent,
     if (!orig_content) {
         content = BAD_CAST "";
     } else if (xmlCheckUTF8(orig_content)) {
-        content = (xmlChar *) orig_content;
+        if (cr_hascontrollchars(orig_content) && _xml_dump_parameters[CR_XML_DUMP_CLEANUP_CHANGELOG]) {
+            size_t len = strlen((const char *) orig_content);
+            content = malloc(sizeof(xmlChar)*len + 1);
+            cr_delete_controlchars(orig_content, content);
+            free_content = 1;
+        } else {
+            content = (xmlChar *) orig_content;
+        }
     } else {
         size_t len = strlen((const char *) orig_content);
         content = malloc(sizeof(xmlChar)*len*2 + 1);
@@ -390,9 +414,11 @@ cr_Package_contains_forbidden_control_chars(cr_Package *pkg)
             g_printerr("Changelog author %s contains forbidden control chars (ASCII values <32 except 9, 10 and 13).\n", ch->author);
             ret = TRUE;
         }
+
         if (ch->changelog && cr_hascontrollchars((unsigned char *) ch->changelog)) {
             g_printerr("Changelog entry %s contains forbidden control chars (ASCII values <32 except 9, 10 and 13).\n", ch->changelog);
-            ret = TRUE;
+            if (!_xml_dump_parameters[CR_XML_DUMP_CLEANUP_CHANGELOG])
+                ret = TRUE;
         }
     }
 
