@@ -69,6 +69,7 @@ struct CmdOptions _cmd_options = {
 
         .zck_compression            = FALSE,
         .zck_dict_dir               = NULL,
+        .cleanup_changelog          = CLEANUP_CHANGELOG_DEFAULT,
         .recycle_pkglist            = FALSE,
 
         .keep_all_metadata          = TRUE,
@@ -200,6 +201,10 @@ static GOptionEntry cmd_entries[] =
     { "general-compress-type", 0, 0, G_OPTION_ARG_STRING, &(_cmd_options.general_compress_type),
       "Which compression type to use (even for primary, filelists and other xml). Supported values are: bz2, gz, zstd, xz.", "COMPRESSION_TYPE" },
 #endif
+    { "cleanup-changelog", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.cleanup_changelog),
+      "Cleanup changelog from control characters.", NULL },
+    { "no-cleanup-changelog", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &(_cmd_options.cleanup_changelog),
+      "Don't cleanup changelog from control characters.", NULL },
     { "keep-all-metadata", 0, 0, G_OPTION_ARG_NONE, &(_cmd_options.keep_all_metadata),
       "Keep all additional metadata (not primary, filelists and other xml or sqlite files, "
       "nor their compressed variants) from source repository during update (default).", NULL },

@@ -89,6 +89,7 @@ struct cr_XmlStruct {
  */
 typedef enum {
     CR_XML_DUMP_DO_PRETTY_PRINT,   /* do a pretty print when dumping the XML */
+    CR_XML_DUMP_CLEANUP_CHANGELOG, /* cleanup changelog from control characters */
 
     CR_XML_DUMP_OPTION_COUNT,
     CR_XML_DUMP_OPTION_MAX = 1024

@@ -80,6 +80,7 @@ struct CmdOptions {
     gboolean xz_compression;    /*!< use xz for repodata compression */
     gboolean zck_compression;   /*!< generate zchunk files */
     char *zck_dict_dir;         /*!< directory with zchunk dictionaries */
+    gboolean cleanup_changelog; /*!< cleanup changelog from control characters */
     gboolean keep_all_metadata; /*!< keep groupfile and updateinfo from source
                                      repo during update */
     gboolean discard_additional_metadata; /*!< Inverse option to keep_all_metadata */
