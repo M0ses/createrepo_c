@@ -76,7 +76,7 @@ struct CmdOptions _cmd_options = {
 gboolean
 duplicated_nevra_option_parser(const gchar *option_name,
                                const gchar *value,
-                               gpointer data,
+                               gpointer udata,
                                GError **error)
 {
     if (!g_strcmp0(value, "keep"))
