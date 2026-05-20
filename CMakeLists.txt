@@ -93,6 +93,7 @@ ENDIF ()
 
 # option to enable/disable python support
 OPTION (ENABLE_PYTHON "Enable python support?" ON)
+SET (PYTHON_EXECUTABLE "" CACHE FILEPATH "Path to python interpreter")
 
 OPTION (WITH_ZCHUNK "Build with zchunk support" ON)
 IF (WITH_ZCHUNK)
